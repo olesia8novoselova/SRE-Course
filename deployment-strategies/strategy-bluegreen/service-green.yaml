@@ -1,0 +1,26 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: deployment-strategies-green
+  labels:
+    app: my-app
+    deployment-type: green
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "9101"
+    prometheus.io/path: "/metrics"
+spec:
+  type: ClusterIP
+  selector:
+    app: my-app
+    deployment-type: green
+  ports:
+  - name: http
+    port: 8080
+    targetPort: 8080
+    protocol: TCP
+  - name: metrics
+    port: 9101
+    targetPort: 9101
+    protocol: TCP
+

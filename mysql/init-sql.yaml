@@ -1,0 +1,10 @@
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: mysql-init-sql
+data:
+  01-exporter.sql: |
+    CREATE USER IF NOT EXISTS 'mysqld_exporter'@'%' IDENTIFIED BY 'exporter_pwd';
+    GRANT PROCESS, REPLICATION CLIENT, SELECT ON *.* TO 'mysqld_exporter'@'%';
+    FLUSH PRIVILEGES;

@@ -1,0 +1,92 @@
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: mysql
+spec:
+  selector:
+    matchLabels:
+      app: mysql
+      app.kubernetes.io/name: mysql
+  serviceName: mysql
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: mysql
+        app.kubernetes.io/name: mysql
+    spec:
+      containers:
+        - name: mysql
+          image: mysql:8.3.0
+          envFrom:
+            - secretRef:
+                name: mysql
+          ports:
+            - name: mysql
+              containerPort: 3306
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/mysql
+              subPath: mysql
+            - name: mysql-init-sql
+              mountPath: /docker-entrypoint-initdb.d
+              readOnly: true
+          resources:
+            requests:
+              cpu: 250m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          livenessProbe:
+            tcpSocket:
+              port: 3306
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+          readinessProbe:
+            tcpSocket:
+              port: 3306
+            initialDelaySeconds: 5
+            periodSeconds: 2
+            timeoutSeconds: 1
+        # sidecar
+        - name: mysqld-exporter
+          image: prom/mysqld-exporter:v0.15.0
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: DATA_SOURCE_NAME
+              valueFrom:
+                secretKeyRef:
+                  name: mysql-exporter
+                  key: DATA_SOURCE_NAME
+          args:
+            - --config.my-cnf=/etc/mysql-exporter/my.cnf
+          ports:
+            - name: metrics
+              containerPort: 9104
+          volumeMounts:
+            - name: mysql-exporter-config
+              mountPath: /etc/mysql-exporter
+              readOnly: true
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 100m
+              memory: 128Mi
+
+      volumes:
+        - name: data
+          emptyDir: {}
+        - name: mysql-exporter-config
+          secret:
+            secretName: mysql-exporter
+            items:
+              - key: my.cnf
+                path: my.cnf
+        - name: mysql-init-sql
+          configMap:
+            name: mysql-init-sql

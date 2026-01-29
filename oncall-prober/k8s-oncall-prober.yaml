@@ -1,0 +1,80 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: oncall-prober
+  namespace: st-inno-novoselova
+  labels:
+    app: oncall-prober
+    group: inno_novoselova
+    service: oncall
+spec:
+  strategy:
+    type: Recreate
+  revisionHistoryLimit: 1
+  selector:
+    matchLabels:
+      app: oncall-prober
+  template:
+    metadata:
+      labels:
+        app: oncall-prober
+        group: inno_novoselova
+        service: oncall
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9081"
+        prometheus.io/path: "/metrics"
+    spec:
+      containers:
+        - name: exporter
+          image: olesianov/oncall-prober:1.1.3
+          imagePullPolicy: Always
+          ports:
+            - name: metrics
+              containerPort: 9081
+          readinessProbe:
+            httpGet:
+              path: /metrics
+              port: metrics
+            initialDelaySeconds: 3
+            periodSeconds: 5
+          env:
+            - name: ONCALL_EXPORTER_API_URL
+              value: "http://oncall:8080"
+            - name: ONCALL_EXPORTER_SCRAPE_INTERVAL
+              value: "30"
+            - name: ONCALL_EXPORTER_METRICS_PORT
+              value: "9081"
+            - name: ONCALL_EXPORTER_HTTP_TIMEOUT
+              value: "5"
+            - name: ONCALL_EXPORTER_LOG_LEVEL
+              value: "INFO"
+            - name: ONCALL_EXPORTER_EVENT_USER
+              value: "jdoe"
+            - name: ONCALL_EXPORTER_EVENT_TEAM
+              value: "Test Team"
+            - name: ONCALL_EXPORTER_EVENT_ROLE
+              value: "primary"
+
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: oncall-prober
+  namespace: st-inno-novoselova
+  labels:
+    app: oncall-prober
+    group: inno_novoselova
+    service: oncall
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "9081"
+    prometheus.io/path: "/metrics"
+spec:
+  selector:
+    app: oncall-prober
+  ports:
+    - name: http-metrics
+      port: 9081
+      targetPort: metrics

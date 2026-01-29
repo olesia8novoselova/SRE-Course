@@ -1,0 +1,118 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: oncall
+  labels:
+    app.kubernetes.io/name: oncall
+    app.kubernetes.io/component: web
+spec:
+  strategy:
+    type: Recreate
+  revisionHistoryLimit: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: oncall
+      app.kubernetes.io/component: web
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: oncall
+        app.kubernetes.io/component: web
+      annotations:
+        sage/group: "inno_novoselova"
+    spec:
+      volumes:
+        - name: oncall-config
+          configMap:
+            name: oncall
+        - name: vector-config
+          configMap:
+            name: oncall
+        - name: nginx-logs
+          emptyDir: {}
+        - name: uwsgi-logs
+          emptyDir: {}
+
+      containers:
+        - name: oncall
+          image: knucksie/sre-ab-oncall:0.3
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: DOCKER_DB_BOOTSTRAP
+              value: "1"
+          ports:
+            - name: http
+              containerPort: 8080
+            - name: metrics
+              containerPort: 8888
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          livenessProbe:
+            httpGet:
+              path: /healthcheck
+              port: 8080
+            failureThreshold: 1
+            initialDelaySeconds: 15
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /healthcheck
+              port: 8080
+            failureThreshold: 1
+            initialDelaySeconds: 15
+            periodSeconds: 10
+          startupProbe:
+            httpGet:
+              path: /healthcheck
+              port: 8080
+            failureThreshold: 10
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          volumeMounts:
+            - name: oncall-config
+              mountPath: /home/oncall/config/config.yaml
+              subPath: oncall.conf
+              readOnly: true
+            - name: nginx-logs
+              mountPath: /home/oncall/var/log/nginx
+            - name: uwsgi-logs
+              mountPath: /home/oncall/var/log/uwsgi
+
+        # vector sidecar
+        - name: vector-sidecar
+          image: timberio/vector:0.34.1-alpine
+          args: ["--config", "/etc/vector/vector.toml"]
+          env:
+            - name: SAGE_ENV
+              value: "test"
+            - name: SAGE_SYSTEM
+              value: "oncall"
+            - name: SAGE_GROUP
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.annotations['sage/group']
+            - name: VECTOR_SELF_NODE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 256Mi
+          volumeMounts:
+            - name: vector-config
+              mountPath: /etc/vector/vector.toml
+              subPath: vector.toml
+              readOnly: true
+            - name: nginx-logs
+              mountPath: /home/oncall/var/log/nginx
+            - name: uwsgi-logs
+              mountPath: /home/oncall/var/log/uwsgi

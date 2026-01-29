@@ -1,0 +1,84 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sticky-demo
+  labels:
+    app: sticky-demo
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: sticky-demo
+  template:
+    metadata:
+      labels:
+        app: sticky-demo
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9101"
+        prometheus.io/path: "/metrics"
+    spec:
+      containers:
+        - name: app
+          image: containersol/k8s-deployment-strategies:latest
+          imagePullPolicy: Always
+          ports:
+            - name: http
+              containerPort: 8080
+            - name: metrics
+              containerPort: 9101
+          env:
+            - name: VERSION
+              value: "sticky-header"
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 250m
+              memory: 256Mi
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 5
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: sticky-demo-svc
+spec:
+  selector:
+    app: sticky-demo
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: sticky-demo-ing
+  
+  annotations:
+    nginx.ingress.kubernetes.io/upstream-hash-by: "$http_x_sticky"
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: sticky.st-inno-novoselova.local
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: sticky-demo-svc
+                port:
+                  number: 80
